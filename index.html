@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Taksit Defteri">
+<title>Taksit Defteri</title>
+<style>
+:root{--bg:#f2f5f4;--card:#fff;--ink:#14231f;--mute:#5f6f6a;--line:#dbe3e0;--ac:#0f6b5c;--ac2:#e3f0ec;--on:#fff;--bad:#b42318;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1715;--card:#18221f;--ink:#e8f0ed;--mute:#9bb0aa;--line:#2a3a35;--ac:#3fbfa8;--ac2:#18332d;--on:#08211c;--bad:#f1867a}}
+:root[data-theme="dark"]{--bg:#0f1715;--card:#18221f;--ink:#e8f0ed;--mute:#9bb0aa;--line:#2a3a35;--ac:#3fbfa8;--ac2:#18332d;--on:#08211c;--bad:#f1867a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.4;padding-bottom:84px}
+#app{max-width:560px;margin:0 auto;padding:12px 16px}
+button{font-family:inherit;cursor:pointer}
+.mnav{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.mnav b{font-size:17px}
+.mnav button{width:44px;height:44px;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:50%;font-size:22px}
+.hero{background:var(--ac);color:var(--on);border-radius:18px;padding:20px}
+.big{font-size:40px;font-weight:700;letter-spacing:-.02em;margin:2px 0 6px}
+.hero div:not(.big){font-size:14px;opacity:.92}
+.two{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}
+.two div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px}
+.two span{display:block;font-size:12px;color:var(--mute)}
+.two b{font-size:15px}
+.pos{color:var(--ac)}.neg{color:var(--bad)}
+h2{font-size:17px;margin:20px 0 8px}
+.row{display:flex;justify-content:space-between;gap:12px;align-items:center;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-bottom:8px;width:100%;text-align:left;color:var(--ink);font-size:16px}
+.row small{display:block;color:var(--mute);font-size:13px}
+.row.done{opacity:.55}
+.row>b{white-space:nowrap}
+.empty,.hint{color:var(--mute);font-size:14px}
+.pri,.sec,.dng{border:0;border-radius:12px;padding:13px;font-weight:600;font-size:16px;width:100%}
+.pri{background:var(--ac);color:var(--on)}
+.sec{background:var(--ac2);color:var(--ac)}
+.dng{background:transparent;color:var(--bad);border:1px solid var(--bad)}
+.btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px}
+.tabs{position:fixed;left:0;right:0;bottom:0;display:flex;gap:4px;background:var(--card);border-top:1px solid var(--line);padding:6px 8px calc(6px + env(safe-area-inset-bottom,0px))}
+.tab{flex:1;border:0;background:none;color:var(--mute);font-size:13px;font-weight:600;padding:10px 2px;border-radius:10px}
+.tab.on{color:var(--ac);background:var(--ac2)}
+#sheet{position:fixed;inset:0;display:flex;align-items:flex-end;background:rgba(0,0,0,.45);z-index:9}
+#sheet[hidden]{display:none}
+.pn{background:var(--card);width:100%;max-width:560px;margin:0 auto;border-radius:18px 18px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));max-height:92%;overflow:auto}
+.pn h3{margin:0 0 4px;font-size:18px}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+input,select,textarea{width:100%;font-size:16px;font-family:inherit;padding:11px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+input[type=checkbox]{width:24px;height:24px}
+.er{color:var(--bad);font-size:14px;min-height:20px;margin:8px 0 0}
+#toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:20px;font-size:14px;z-index:20;max-width:90%}
+#toast[hidden]{display:none}
+</style></head>
+<body>
+<div id="app"></div>
+<div class="tabs">
+<button class="tab" data-t="home" onclick="go('home')">Özet</button>
+<button class="tab" data-t="cards" onclick="go('cards')">Kartlar</button>
+<button class="tab" data-t="inst" onclick="go('inst')">Taksitler</button>
+<button class="tab" data-t="tx" onclick="go('tx')">Gelir/Gider</button>
+</div>
+<div id="sheet" hidden><div class="pn" id="pn"></div></div>
+<div id="toast" hidden></div>
+<script>
+const $=s=>document.querySelector(s);
+const MN=['Ocak','Şubat','Mart','Nisan','Mayıs','Haziran','Temmuz','Ağustos','Eylül','Ekim','Kasım','Aralık'];
+const pad=n=>String(n).padStart(2,'0');
+const nowYM=()=>{const d=new Date();return d.getFullYear()*12+d.getMonth()};
+const toIdx=s=>{const[y,m]=s.split('-').map(Number);return y*12+m-1};
+const ymStr=i=>Math.floor(i/12)+'-'+pad(i%12+1);
+const lab=i=>MN[i%12]+' '+Math.floor(i/12);
+const TL=n=>new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY',maximumFractionDigits:2}).format(n||0);
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,9);
+let S={cards:[],inst:[],tx:[]},tab='home',ym=nowYM(),cur=null;
+try{const r=localStorage.getItem('td1');if(r)S=JSON.parse(r)}catch(e){}
+const save=()=>{try{localStorage.setItem('td1',JSON.stringify(S))}catch(e){}};
+const C=k=>k==='card'?S.cards:k==='inst'?S.inst:S.tx;
+const cname=id=>id==='bank'?'Banka hesabı':(S.cards.find(c=>c.id===id)||{}).name||'Silinmiş kart';
+const due=(i,m)=>{const k=m-toIdx(i.start);return k>=0&&k<i.total-i.paid?i.monthly:0};
+const isB=i=>i.kind==='birikim',isD=i=>i.kind==='bağış';
+const left=i=>Math.max(0,i.total-i.paid-Math.max(0,nowYM()-toIdx(i.start)));
+const txIn=(t,m)=>{const d=toIdx(t.date.slice(0,7));return t.rec?m>=d:d===m};
+const sumTx=ty=>S.tx.filter(t=>t.type===ty&&txIn(t,ym)).reduce((a,t)=>a+t.amount,0);
+const F={
+card:{t:'Kart',f:[['name','Kart adı','text'],['limit','Limit (TL)','number'],['cut','Hesap kesim günü','number'],['due','Son ödeme günü','number']]},
+inst:{t:'Taksit',f:[['card','Kart','card'],['desc','Açıklama','text'],['monthly','Aylık tutar (TL)','number'],['total','Toplam taksit sayısı','number'],['paid','Ödenmiş taksit sayısı','number'],['start','Sıradaki ödeme ayı','month'],['kind','Tür','sel:gider|birikim|bağış']]},
+tx:{t:'Kayıt',f:[['type','Tür','sel:gider|gelir|birikim|bağış'],['amount','Tutar (TL)','number'],['cat','Kategori (market, maaş...)','text'],['date','Tarih','date'],['rec','Her ay tekrar eder','check']]}
+};
+function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2600)}
+function go(t){tab=t;render();window.scrollTo(0,0)}
+function mv(d){ym+=d;render()}
+const mnav=()=>`<div class="mnav"><button onclick="mv(-1)" aria-label="Önceki ay">‹</button><b>${lab(ym)}</b><button onclick="mv(1)" aria-label="Sonraki ay">›</button></div>`;
+const addBtn=(k,t)=>`<button class="pri" style="margin-bottom:12px" onclick="openF('${k}')">${t}</button>`;
+
+function home(){
+ const pay=S.inst.reduce((a,i)=>a+due(i,ym),0),payB=S.inst.filter(isB).reduce((a,i)=>a+due(i,ym),0),inc=sumTx('gelir'),payD=S.inst.filter(isD).reduce((a,i)=>a+due(i,ym),0),exp=sumTx('gider')+pay-payB-payD,sav=sumTx('birikim')+payB,don=sumTx('bağış')+payD,rest=inc-exp-sav-don;
+ const debt=S.inst.filter(i=>!isB(i)).reduce((a,i)=>a+i.monthly*left(i),0);
+ const rate=inc>0?Math.round(sav/inc*100):0,rateD=inc>0?Math.round(don/inc*100):0;
+ let h=`<div class="hero"><div>${lab(ym)} taksit ödemeleri</div><div class="big">${TL(pay)}</div><div>Bunun birikim kısmı: <b>${TL(payB)}</b></div><div>Toplam kalan taksit borcu: <b>${TL(debt)}</b></div></div>
+ <div class="two"><div><span>Gelir</span><b class="pos">${TL(inc)}</b></div><div><span>Harcama</span><b>${TL(exp)}</b></div><div><span>Birikim</span><b class="pos">${TL(sav)}</b><span>Gelirin %${rate}'i</span></div><div><span>Bağış</span><b>${TL(don)}</b><span>Gelirin %${rateD}'i</span></div><div style="grid-column:1/-1"><span>Ay sonu kalan</span><b class="${rest<0?'neg':'pos'}">${TL(rest)}</b></div></div>
+ <h2>Kartlara göre</h2>`;
+ if(!S.cards.length)h+='<p class="empty">Başlamak için Kartlar sekmesinden ilk kartını ekle.</p>';
+ S.cards.forEach(c=>{
+  const its=S.inst.filter(i=>i.card===c.id);
+  const p=its.reduce((a,i)=>a+due(i,ym),0),pB=its.filter(isB).reduce((a,i)=>a+due(i,ym),0),pD=its.filter(isD).reduce((a,i)=>a+due(i,ym),0),d=its.filter(i=>!isB(i)).reduce((a,i)=>a+i.monthly*left(i),0);
+  h+=`<div class="row"><div><b>${esc(c.name)}</b><small>Son ödeme günü: ${c.due||'-'}</small><small>Kalan borç ${TL(d)}${c.limit?' (limit '+TL(c.limit)+')':''}</small>${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}</div><b>${TL(p)}</b></div>`;
+ });
+ const bi=S.inst.filter(i=>i.card==='bank');
+ if(bi.length){const p=bi.reduce((a,i)=>a+due(i,ym),0),pB=bi.filter(isB).reduce((a,i)=>a+due(i,ym),0),pD=bi.filter(isD).reduce((a,i)=>a+due(i,ym),0),d=bi.filter(i=>!isB(i)).reduce((a,i)=>a+i.monthly*left(i),0);
+  h+=`<div class="row"><div><b>Banka hesabı</b><small>Kalan borç ${TL(d)}</small>${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}</div><b>${TL(p)}</b></div>`}
+ h+=`<h2>Yedek</h2><p class="hint">Veriler bu telefonda saklanır. Ara sıra yedeği kopyalayıp Notlar uygulamasına yapıştır. Geri yüklemek için yedek metnini aşağıya yapıştır; mevcut verinin yerine geçer.</p>
+ <textarea id="bk" rows="3" aria-label="Yedek metni"></textarea><div class="btns"><button class="sec" onclick="bk()">Yedeği kopyala</button><button class="sec" onclick="rs()">Geri yükle</button></div>`;
+ return h;
+}
+function cards(){
+ let h=addBtn('card','Kart ekle');
+ if(!S.cards.length)h+='<p class="empty">Henüz kart yok. Yukarıdan ilk kartını ekle.</p>';
+ S.cards.forEach(c=>h+=`<button class="row" onclick="openF('card','${c.id}')"><div><b>${esc(c.name)}</b><small>Hesap kesim günü: ${c.cut||'-'}</small><small>Son ödeme günü: ${c.due||'-'}</small></div><b>${c.limit?TL(c.limit):''}</b></button>`);
+ return h;
+}
+function insts(){
+ let h=addBtn('inst','Taksit ekle');
+ if(!S.inst.length)h+='<p class="empty">Henüz taksit yok. Yukarıdan ilk taksitini ekle.</p>';
+ S.inst.forEach(i=>{const n=left(i);
+  h+=`<button class="row ${n?'':'done'}" onclick="openF('inst','${i.id}')"><div><b>${esc(i.desc)}</b><small>${esc(cname(i.card))}${isB(i)?' · Birikim':isD(i)?' · Bağış':''}</small><small>${TL(i.monthly)} her ay, ${n?n+' ay kaldı':'bitti'}</small></div><b>${TL(i.monthly*n)}</b></button>`});
+ return h;
+}
+function txs(){
+ let h=addBtn('tx','Gelir veya gider ekle');
+ const l=S.tx.filter(t=>txIn(t,ym)).sort((a,b)=>b.date.localeCompare(a.date));
+ if(!l.length)h+='<p class="empty">Bu ay için kayıt yok.</p>';
+ l.forEach(t=>h+=`<button class="row" onclick="openF('tx','${t.id}')"><div><b>${esc(t.cat||(t.type==='gelir'?'Gelir':'Gider'))}</b><small>${t.date.split('-').reverse().join('.')}${t.rec?', her ay':''}${t.type==='birikim'?' · Birikim':t.type==='bağış'?' · Bağış':''}</small></div><b class="${t.type==='gelir'?'pos':''}">${t.type==='gelir'?'+':'-'}${TL(t.amount)}</b></button>`);
+ return h;
+}
+function render(){
+ $('#app').innerHTML=(tab==='cards'||tab==='inst'?'':mnav())+(tab==='home'?home():tab==='cards'?cards():tab==='inst'?insts():txs());
+ document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('on',b.dataset.t===tab));
+}
+function openF(k,id){
+ if(k==='inst'&&!S.cards.length){go('cards');toast('Önce bir kart ekle');return}
+ const it=id?C(k).find(x=>x.id===id):null;
+ const d=k==='inst'?{card:S.cards[0].id,kind:'gider',paid:0,start:ymStr(nowYM())}:k==='tx'?{type:'gider',date:ymStr(nowYM())+'-'+pad(new Date().getDate())}:{};
+ const o=it||d;cur={k,id:it?it.id:null};
+ let h=`<h3>${it?F[k].t+' düzenle':F[k].t+' ekle'}</h3>`;
+ F[k].f.forEach(([n,l,t])=>{
+  const v=o[n];let inp;
+  if(t==='card')inp=`<select id="f_${n}">${S.cards.map(c=>`<option value="${c.id}" ${c.id===v?'selected':''}>${esc(c.name)}</option>`).join('')}<option value="bank" ${v==='bank'?'selected':''}>Banka hesabı</option></select>`;
+  else if(t.startsWith('sel:'))inp=`<select id="f_${n}">${t.slice(4).split('|').map(x=>`<option value="${x}" ${x===v?'selected':''}>${x[0].toUpperCase()+x.slice(1)}</option>`).join('')}</select>`;
+  else if(t==='check')inp=`<input type="checkbox" id="f_${n}" ${v?'checked':''}>`;
+  else inp=`<input id="f_${n}" type="${t==='number'?'text':t}" ${t==='number'?'inputmode="decimal"':''} value="${esc(v)}">`;
+  h+=`<label for="f_${n}">${l}</label>${inp}`;
+ });
+ h+=`<div class="er" id="er"></div><div class="btns"><button class="sec" onclick="closeF()">Vazgeç</button><button class="pri" onclick="saveF()">Kaydet</button></div>`;
+ if(it)h+=`<button class="dng" style="margin-top:10px" onclick="del(this)">Sil</button>`;
+ $('#pn').innerHTML=h;$('#sheet').hidden=false;
+}
+function closeF(){$('#sheet').hidden=true;cur=null}
+function saveF(){
+ const{k,id}=cur,o={id:id||uid()};
+ F[k].f.forEach(([n,l,t])=>{const e=$('#f_'+n);let v=t==='check'?e.checked:e.value.trim();if(t==='number')v=v===''?null:parseFloat(v.replace(',','.'));o[n]=v});
+ let er='';
+ if(k==='card'){if(!o.name)er='Kart adı yaz.';else if([o.cut,o.due].some(x=>x!=null&&(!(x>=1)||x>31)))er='Gün 1 ile 31 arasında olmalı.'}
+ if(k==='inst'){if(!o.desc)er='Açıklama yaz.';else if(!(o.monthly>0))er='Aylık tutarı yaz.';else if(!(o.total>=1))er='Toplam taksit sayısını yaz.';else{o.paid=o.paid||0;if(o.paid>=o.total)er='Ödenmiş taksit sayısı toplamdan küçük olmalı.';else if(!o.start)er='Sıradaki ödeme ayını seç.'}}
+ if(k==='tx'){if(!(o.amount>0))er='Tutar yaz.';else if(!o.date)er='Tarih seç.'}
+ if(er){$('#er').textContent=er;return}
+ const c=C(k),i=c.findIndex(x=>x.id===o.id);i>=0?c[i]=o:c.push(o);
+ save();closeF();render();
+}
+function del(b){
+ if(b.dataset.s!=='1'){b.dataset.s='1';b.textContent='Silmek için tekrar dokun';return}
+ const{k,id}=cur;
+ if(k==='card'&&S.inst.some(i=>i.card===id)){$('#er').textContent='Önce bu karta bağlı taksitleri sil.';return}
+ const c=C(k);c.splice(c.findIndex(x=>x.id===id),1);save();closeF();render();
+}
+function bk(){
+ const t=$('#bk');t.value=JSON.stringify(S);t.select();
+ try{navigator.clipboard.writeText(t.value).then(()=>toast('Yedek kopyalandı'),()=>toast('Metni elle kopyala'))}catch(e){toast('Metni elle kopyala')}
+}
+function rs(){
+ try{const o=JSON.parse($('#bk').value);if(!Array.isArray(o.cards)||!Array.isArray(o.inst)||!Array.isArray(o.tx))throw 0;S=o;save();render();toast('Yedek geri yüklendi')}
+ catch(e){toast('Yedek metni geçersiz')}
+}
+$('#sheet').addEventListener('click',e=>{if(e.target.id==='sheet')closeF()});
+render();
+</script></body></html>
