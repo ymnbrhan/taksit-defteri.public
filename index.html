@@ -102,11 +102,11 @@ function home(){
  S.cards.forEach(c=>{
   const its=S.inst.filter(i=>i.card===c.id);
   const p=its.reduce((a,i)=>a+due(i,ym),0),pB=its.filter(isB).reduce((a,i)=>a+due(i,ym),0),pD=its.filter(isD).reduce((a,i)=>a+due(i,ym),0),d=its.filter(i=>!isB(i)).reduce((a,i)=>a+i.monthly*left(i),0);
-  h+=`<div class="row"><div><b>${esc(c.name)}</b><small>Son ödeme günü: ${c.due||'-'}</small><small>Kalan borç ${TL(d)}${c.limit?' (limit '+TL(c.limit)+')':''}</small>${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}</div><b>${TL(p)}</b></div>`;
+  h+=`<button class="row" onclick="showCard('${c.id}')"><div><b>${esc(c.name)}</b><small>Son ödeme günü: ${c.due||'-'}</small><small>Kalan borç ${TL(d)}${c.limit?' (limit '+TL(c.limit)+')':''}</small>${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}</div><b>${TL(p)}</b></button>`;
  });
  const bi=S.inst.filter(i=>i.card==='bank');
  if(bi.length){const p=bi.reduce((a,i)=>a+due(i,ym),0),pB=bi.filter(isB).reduce((a,i)=>a+due(i,ym),0),pD=bi.filter(isD).reduce((a,i)=>a+due(i,ym),0),d=bi.filter(i=>!isB(i)).reduce((a,i)=>a+i.monthly*left(i),0);
-  h+=`<div class="row"><div><b>Banka hesabı</b><small>Kalan borç ${TL(d)}</small>${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}</div><b>${TL(p)}</b></div>`}
+  h+=`<button class="row" onclick="showCard('bank')"><div><b>Banka hesabı</b><small>Kalan borç ${TL(d)}</small>${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}</div><b>${TL(p)}</b></button>`}
  h+=`<h2>Yedek</h2><p class="hint">Veriler bu telefonda saklanır. Ara sıra yedeği kopyalayıp Notlar uygulamasına yapıştır. Geri yüklemek için yedek metnini aşağıya yapıştır; mevcut verinin yerine geçer.</p>
  <textarea id="bk" rows="3" aria-label="Yedek metni"></textarea><div class="btns"><button class="sec" onclick="bk()">Yedeği kopyala</button><button class="sec" onclick="rs()">Geri yükle</button></div>`;
  return h;
@@ -152,6 +152,17 @@ function openF(k,id){
  h+=`<div class="er" id="er"></div><div class="btns"><button class="sec" onclick="closeF()">Vazgeç</button><button class="pri" onclick="saveF()">Kaydet</button></div>`;
  if(it)h+=`<button class="dng" style="margin-top:10px" onclick="del(this)">Sil</button>`;
  $('#pn').innerHTML=h;$('#sheet').hidden=false;
+}
+function showCard(id){
+ const its=S.inst.filter(i=>i.card===id),tag=i=>isB(i)?' · Birikim':isD(i)?' · Bağış':'';
+ const now=its.filter(i=>due(i,ym)>0).sort((a,b)=>b.monthly-a.monthly),rest=its.filter(i=>due(i,ym)===0&&left(i)>0),fin=its.filter(i=>left(i)===0&&due(i,ym)===0);
+ const row=(i,cls)=>`<button class="row ${cls}" onclick="openF('inst','${i.id}')"><div><b>${esc(i.desc)}</b><small>${TL(i.monthly)} her ay, ${left(i)?left(i)+' ay kaldı':'bitti'}${tag(i)}</small></div><b>${TL(cls==='done'?0:left(i)*i.monthly)}</b></button>`;
+ let h=`<h3>${esc(cname(id))}</h3><p class="hint">${lab(ym)} ödemesi: <b>${TL(now.reduce((a,i)=>a+i.monthly,0))}</b></p>`;
+ h+=`<h2>${lab(ym)} ödenecekler</h2>`+(now.length?now.map(i=>row(i,'')).join(''):'<p class="empty">Bu ay ödeme yok.</p>');
+ if(rest.length)h+='<h2>Başlamamış</h2>'+rest.map(i=>row(i,'')).join('');
+ if(fin.length)h+='<h2>Biten</h2>'+fin.map(i=>row(i,'done')).join('');
+ h+='<button class="sec" style="margin-top:12px" onclick="closeF()">Kapat</button>';
+ $('#pn').innerHTML=h;$('#sheet').hidden=false;cur=null;
 }
 function closeF(){$('#sheet').hidden=true;cur=null}
 function saveF(){
