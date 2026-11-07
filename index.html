@@ -77,13 +77,17 @@ const C=k=>k==='card'?S.cards:k==='inst'?S.inst:S.tx;
 const cname=id=>id==='bank'?'Banka hesabı':(S.cards.find(c=>c.id===id)||{}).name||'Silinmiş kart';
 const due=(i,m)=>{const k=m-toIdx(i.start);return k>=0&&k<i.total-i.paid?i.monthly:0};
 const isB=i=>i.kind==='birikim',isD=i=>i.kind==='bağış';
-const left=i=>Math.max(0,i.total-i.paid-Math.max(0,nowYM()-toIdx(i.start)));
-const txIn=(t,m)=>{const d=toIdx(t.date.slice(0,7));return t.rec?m>=d:d===m};
+const left=i=>Math.max(0,i.total-i.paid-Math.max(0,nowYM()-toIdx(i.start)+(passed(i.card)?1:0)));
+const shift=(cid,ds)=>{const c=S.cards.find(x=>x.id===cid),d=+ds.slice(8,10);let m=toIdx(ds.slice(0,7));if(c&&c.cut){if(d>c.cut)m++;if(c.due&&c.due<=c.cut)m++}return m};
+const txEff=t=>shift(t.card,t.date);
+const txIn=(t,m)=>{const d=txEff(t);return t.rec?m>=d:d===m};
+const passed=id=>{const c=S.cards.find(x=>x.id===id);return !!(c&&c.due&&new Date().getDate()>c.due)};
+const cardTx=(id,m)=>S.tx.filter(t=>t.type!=='gelir'&&t.card===id&&txIn(t,m));
 const sumTx=ty=>S.tx.filter(t=>t.type===ty&&txIn(t,ym)).reduce((a,t)=>a+t.amount,0);
 const F={
 card:{t:'Kart',f:[['name','Kart adı','text'],['limit','Limit (TL)','number'],['cut','Hesap kesim günü','number'],['due','Son ödeme günü','number']]},
-inst:{t:'Taksit',f:[['card','Kart','card'],['desc','Açıklama','text'],['monthly','Aylık tutar (TL)','number'],['total','Toplam taksit sayısı','number'],['paid','Ödenmiş taksit sayısı','number'],['start','Sıradaki ödeme ayı','month'],['kind','Tür','sel:gider|birikim|bağış']]},
-tx:{t:'Kayıt',f:[['type','Tür','sel:gider|gelir|birikim|bağış'],['amount','Tutar (TL)','number'],['cat','Kategori (market, maaş...)','text'],['date','Tarih','date'],['rec','Her ay tekrar eder','check']]}
+inst:{t:'Taksit',f:[['card','Kart','card'],['desc','Açıklama','text'],['monthly','Aylık tutar (TL)','number'],['total','Toplam taksit sayısı','number'],['paid','Ödenmiş taksit sayısı','number'],['date','Alışveriş tarihi (girersen ilk ödeme ayı kesim gününe göre otomatik hesaplanır)','date'],['start','Sıradaki ödeme ayı','month'],['kind','Tür','sel:gider|birikim|bağış']]},
+tx:{t:'Kayıt',f:[['type','Tür','sel:gider|gelir|birikim|bağış'],['amount','Tutar (TL)','number'],['cat','Kategori (market, maaş...)','text'],['date','Tarih','date'],['card','Kart (nakit ya da hesap ise Banka hesabı)','card'],['rec','Her ay tekrar eder','check']]}
 };
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.h);toast.h=setTimeout(()=>t.hidden=true,2600)}
 function go(t){tab=t;render();window.scrollTo(0,0)}
@@ -99,14 +103,12 @@ function home(){
  <div class="two"><div><span>Gelir</span><b class="pos">${TL(inc)}</b></div><div><span>Harcama</span><b>${TL(exp)}</b></div><div><span>Birikim</span><b class="pos">${TL(sav)}</b><span>Gelirin %${rate}'i</span></div><div><span>Bağış</span><b>${TL(don)}</b><span>Gelirin %${rateD}'i</span></div><div style="grid-column:1/-1"><span>Ay sonu kalan</span><b class="${rest<0?'neg':'pos'}">${TL(rest)}</b></div></div>
  <h2>Kartlara göre</h2>`;
  if(!S.cards.length)h+='<p class="empty">Başlamak için Kartlar sekmesinden ilk kartını ekle.</p>';
- S.cards.forEach(c=>{
-  const its=S.inst.filter(i=>i.card===c.id);
-  const p=its.reduce((a,i)=>a+due(i,ym),0),pB=its.filter(isB).reduce((a,i)=>a+due(i,ym),0),pD=its.filter(isD).reduce((a,i)=>a+due(i,ym),0),d=its.filter(i=>!isB(i)).reduce((a,i)=>a+i.monthly*left(i),0);
-  h+=`<button class="row" onclick="showCard('${c.id}')"><div><b>${esc(c.name)}</b><small>Son ödeme günü: ${c.due||'-'}</small><small>Kalan borç ${TL(d)}${c.limit?' (limit '+TL(c.limit)+')':''}</small>${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}</div><b>${TL(p)}</b></button>`;
- });
- const bi=S.inst.filter(i=>i.card==='bank');
- if(bi.length){const p=bi.reduce((a,i)=>a+due(i,ym),0),pB=bi.filter(isB).reduce((a,i)=>a+due(i,ym),0),pD=bi.filter(isD).reduce((a,i)=>a+due(i,ym),0),d=bi.filter(i=>!isB(i)).reduce((a,i)=>a+i.monthly*left(i),0);
-  h+=`<button class="row" onclick="showCard('bank')"><div><b>Banka hesabı</b><small>Kalan borç ${TL(d)}</small>${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}</div><b>${TL(p)}</b></button>`}
+ const crow=(id,name,sub)=>{
+  const its=S.inst.filter(i=>i.card===id),pT=cardTx(id,ym).reduce((a,t)=>a+t.amount,0),sI=f=>its.filter(f).reduce((a,i)=>a+due(i,ym),0);
+  const p=sI(()=>true)+pT,pB=sI(isB),pD=sI(isD),d=its.filter(i=>!isB(i)).reduce((a,i)=>a+i.monthly*left(i),0),ok=ym===nowYM()&&passed(id)&&p>0;
+  return `<button class="row" onclick="showCard('${id}')"><div><b>${esc(name)}</b>${sub}<small>Kalan taksit borcu ${TL(d)}</small>${pT?`<small>Harcamalar ${TL(pT)}</small>`:''}${pB?`<small>Birikim payı ${TL(pB)}</small>`:''}${pD?`<small>Bağış payı ${TL(pD)}</small>`:''}${ok?`<small>Bu ay ${TL(p)}, son ödeme geçti</small>`:''}</div><b>${ok?'Ödendi':TL(p)}</b></button>`};
+ S.cards.forEach(c=>h+=crow(c.id,c.name,`<small>Son ödeme günü: ${c.due||'-'}${c.limit?' (limit '+TL(c.limit)+')':''}</small>`));
+ if(S.inst.some(i=>i.card==='bank')||S.tx.some(t=>t.card==='bank'&&t.type!=='gelir'))h+=crow('bank','Banka hesabı','');
  h+=`<h2>Yedek</h2><p class="hint">Veriler bu telefonda saklanır. Ara sıra yedeği kopyalayıp Notlar uygulamasına yapıştır. Geri yüklemek için yedek metnini aşağıya yapıştır; mevcut verinin yerine geçer.</p>
  <textarea id="bk" rows="3" aria-label="Yedek metni"></textarea><div class="btns"><button class="sec" onclick="bk()">Yedeği kopyala</button><button class="sec" onclick="rs()">Geri yükle</button></div>`;
  return h;
@@ -119,16 +121,17 @@ function cards(){
 }
 function insts(){
  let h=addBtn('inst','Taksit ekle');
- if(!S.inst.length)h+='<p class="empty">Henüz taksit yok. Yukarıdan ilk taksitini ekle.</p>';
- S.inst.forEach(i=>{const n=left(i);
-  h+=`<button class="row ${n?'':'done'}" onclick="openF('inst','${i.id}')"><div><b>${esc(i.desc)}</b><small>${esc(cname(i.card))}${isB(i)?' · Birikim':isD(i)?' · Bağış':''}</small><small>${TL(i.monthly)} her ay, ${n?n+' ay kaldı':'bitti'}</small></div><b>${TL(i.monthly*n)}</b></button>`});
+ const vis=S.inst.filter(i=>left(i)>0);
+ if(!vis.length)h+='<p class="empty">Aktif taksit yok. Yukarıdan taksit ekleyebilirsin.</p>';
+ vis.forEach(i=>{const n=left(i);
+  h+=`<button class="row ${n?'':'done'}" onclick="openF('inst','${i.id}')"><div><b>${esc(i.desc)}</b><small>${esc(cname(i.card))}${isB(i)?' · Birikim':isD(i)?' · Bağış':''}</small><small>${n?'Kalan toplam '+TL(i.monthly*n)+', '+n+' ay kaldı':'bitti'}</small></div><b>${TL(i.monthly)}</b></button>`});
  return h;
 }
 function txs(){
  let h=addBtn('tx','Gelir veya gider ekle');
  const l=S.tx.filter(t=>txIn(t,ym)).sort((a,b)=>b.date.localeCompare(a.date));
  if(!l.length)h+='<p class="empty">Bu ay için kayıt yok.</p>';
- l.forEach(t=>h+=`<button class="row" onclick="openF('tx','${t.id}')"><div><b>${esc(t.cat||(t.type==='gelir'?'Gelir':'Gider'))}</b><small>${t.date.split('-').reverse().join('.')}${t.rec?', her ay':''}${t.type==='birikim'?' · Birikim':t.type==='bağış'?' · Bağış':''}</small></div><b class="${t.type==='gelir'?'pos':''}">${t.type==='gelir'?'+':'-'}${TL(t.amount)}</b></button>`);
+ l.forEach(t=>h+=`<button class="row" onclick="openF('tx','${t.id}')"><div><b>${esc(t.cat||(t.type==='gelir'?'Gelir':'Gider'))}</b><small>${t.card?esc(cname(t.card))+' · ':''}${t.date.split('-').reverse().join('.')}${t.rec?', her ay':(txEff(t)!==toIdx(t.date.slice(0,7))?' · '+lab(txEff(t))+' ekstresine':'')}${t.type==='birikim'?' · Birikim':t.type==='bağış'?' · Bağış':''}</small></div><b class="${t.type==='gelir'?'pos':''}">${t.type==='gelir'?'+':'-'}${TL(t.amount)}</b></button>`);
  return h;
 }
 function render(){
@@ -138,7 +141,7 @@ function render(){
 function openF(k,id){
  if(k==='inst'&&!S.cards.length){go('cards');toast('Önce bir kart ekle');return}
  const it=id?C(k).find(x=>x.id===id):null;
- const d=k==='inst'?{card:S.cards[0].id,kind:'gider',paid:0,start:ymStr(nowYM())}:k==='tx'?{type:'gider',date:ymStr(nowYM())+'-'+pad(new Date().getDate())}:{};
+ const d=k==='inst'?{card:S.cards[0].id,kind:'gider',paid:0,start:ymStr(nowYM())}:k==='tx'?{type:'gider',card:(S.tx.length&&S.tx[S.tx.length-1].card)||(S.cards[0]?S.cards[0].id:'bank'),date:ymStr(nowYM())+'-'+pad(new Date().getDate())}:{};
  const o=it||d;cur={k,id:it?it.id:null};
  let h=`<h3>${it?F[k].t+' düzenle':F[k].t+' ekle'}</h3>`;
  F[k].f.forEach(([n,l,t])=>{
@@ -154,13 +157,15 @@ function openF(k,id){
  $('#pn').innerHTML=h;$('#sheet').hidden=false;
 }
 function showCard(id){
- const its=S.inst.filter(i=>i.card===id),tag=i=>isB(i)?' · Birikim':isD(i)?' · Bağış':'';
- const now=its.filter(i=>due(i,ym)>0).sort((a,b)=>b.monthly-a.monthly),rest=its.filter(i=>due(i,ym)===0&&left(i)>0),fin=its.filter(i=>left(i)===0&&due(i,ym)===0);
- const row=(i,cls)=>`<button class="row ${cls}" onclick="openF('inst','${i.id}')"><div><b>${esc(i.desc)}</b><small>${TL(i.monthly)} her ay, ${left(i)?left(i)+' ay kaldı':'bitti'}${tag(i)}</small></div><b>${TL(cls==='done'?0:left(i)*i.monthly)}</b></button>`;
- let h=`<h3>${esc(cname(id))}</h3><p class="hint">${lab(ym)} ödemesi: <b>${TL(now.reduce((a,i)=>a+i.monthly,0))}</b></p>`;
- h+=`<h2>${lab(ym)} ödenecekler</h2>`+(now.length?now.map(i=>row(i,'')).join(''):'<p class="empty">Bu ay ödeme yok.</p>');
- if(rest.length)h+='<h2>Başlamamış</h2>'+rest.map(i=>row(i,'')).join('');
- if(fin.length)h+='<h2>Biten</h2>'+fin.map(i=>row(i,'done')).join('');
+ const tag=i=>isB(i)?' · Birikim':isD(i)?' · Bağış':'',all=S.inst.filter(i=>i.card===id),its=all.filter(i=>left(i)>0),ok=ym===nowYM()&&passed(id);
+ const tx=cardTx(id,ym).sort((a,b)=>b.date.localeCompare(a.date)),now=its.filter(i=>due(i,ym)>0).sort((a,b)=>b.monthly-a.monthly),rest=its.filter(i=>due(i,ym)===0);
+ const tot=all.reduce((a,i)=>a+due(i,ym),0)+tx.reduce((a,t)=>a+t.amount,0);
+ const row=i=>`<button class="row" onclick="openF('inst','${i.id}')"><div><b>${esc(i.desc)}</b><small>${TL(i.monthly)} her ay, ${left(i)} ay kaldı${tag(i)}</small></div><b>${TL(left(i)*i.monthly)}</b></button>`;
+ const trow=t=>`<button class="row" onclick="openF('tx','${t.id}')"><div><b>${esc(t.cat||'Gider')}</b><small>${t.date.split('-').reverse().join('.')}${tag({kind:t.type})}</small></div><b>-${TL(t.amount)}</b></button>`;
+ let h=`<h3>${esc(cname(id))}</h3>`;
+ if(ok)h+=`<p class="hint">Son ödeme günü geçti. ${lab(ym)} ekstresi (${TL(tot)}) ödendi sayıldı.</p>`;
+ else h+=`<p class="hint">${lab(ym)} ekstresi: <b>${TL(tot)}</b></p><h2>Taksitler</h2>`+(now.length?now.map(row).join(''):'<p class="empty">Bu ay taksit yok.</p>')+'<h2>Harcamalar</h2>'+(tx.length?tx.map(trow).join(''):'<p class="empty">Bu ay harcama yok.</p>');
+ if(rest.length)h+='<h2>Başlamamış</h2>'+rest.map(row).join('');
  h+='<button class="sec" style="margin-top:12px" onclick="closeF()">Kapat</button>';
  $('#pn').innerHTML=h;$('#sheet').hidden=false;cur=null;
 }
@@ -168,18 +173,20 @@ function closeF(){$('#sheet').hidden=true;cur=null}
 function saveF(){
  const{k,id}=cur,o={id:id||uid()};
  F[k].f.forEach(([n,l,t])=>{const e=$('#f_'+n);let v=t==='check'?e.checked:e.value.trim();if(t==='number')v=v===''?null:parseFloat(v.replace(',','.'));o[n]=v});
- let er='';
+ let er='',dateUsed=false;
+ if(k==='inst'&&o.date){o.start=ymStr(shift(o.card,o.date));dateUsed=true}
  if(k==='card'){if(!o.name)er='Kart adı yaz.';else if([o.cut,o.due].some(x=>x!=null&&(!(x>=1)||x>31)))er='Gün 1 ile 31 arasında olmalı.'}
  if(k==='inst'){if(!o.desc)er='Açıklama yaz.';else if(!(o.monthly>0))er='Aylık tutarı yaz.';else if(!(o.total>=1))er='Toplam taksit sayısını yaz.';else{o.paid=o.paid||0;if(o.paid>=o.total)er='Ödenmiş taksit sayısı toplamdan küçük olmalı.';else if(!o.start)er='Sıradaki ödeme ayını seç.'}}
  if(k==='tx'){if(!(o.amount>0))er='Tutar yaz.';else if(!o.date)er='Tarih seç.'}
  if(er){$('#er').textContent=er;return}
+ if(k==='inst')delete o.date;
  const c=C(k),i=c.findIndex(x=>x.id===o.id);i>=0?c[i]=o:c.push(o);
- save();closeF();render();
+ save();closeF();render();if(dateUsed)toast('İlk ödeme ayı: '+lab(toIdx(o.start)));
 }
 function del(b){
  if(b.dataset.s!=='1'){b.dataset.s='1';b.textContent='Silmek için tekrar dokun';return}
  const{k,id}=cur;
- if(k==='card'&&S.inst.some(i=>i.card===id)){$('#er').textContent='Önce bu karta bağlı taksitleri sil.';return}
+ if(k==='card'&&(S.inst.some(i=>i.card===id)||S.tx.some(t=>t.card===id))){$('#er').textContent='Önce bu karta bağlı taksit ve harcamaları sil.';return}
  const c=C(k);c.splice(c.findIndex(x=>x.id===id),1);save();closeF();render();
 }
 function bk(){
